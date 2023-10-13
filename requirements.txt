@@ -1,0 +1,10 @@
+transformers
+datasets
+sacrebleu
+rougue_score
+torch
+accelerate
+torchvision
+tk-tools
+PyMuPDF
+reportlab
