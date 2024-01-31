@@ -8,3 +8,9 @@ torchvision
 tk-tools
 PyMuPDF
 reportlab
+fitz
+streamlit
+streamlit-option-menu
+torch
+frontend
+tools
