@@ -4,6 +4,8 @@ Summary.pdf
 
 bart-papers-trained-model/*
 
+iter_trained_model/*
+
 Images/Transformer Architecture.drawio
 
 static/*

@@ -1,107 +1,175 @@
-import fitz
+import PyPDF2
 import re
-import streamlit as st
+import base64
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import Spacer
+from language_tool_python import LanguageTool
 from transformers import AutoTokenizer, BartForConditionalGeneration
 
-def getPaperContent(pdf_file_path):
-    if pdf_file_path is None:
-        st.error("Please upload a valid PDF file.")
-        return []
+model_path = "iter_trained_model"
+tokenizer_path = "facebook/bart-large-cnn"
 
-    try:
-        st.write("Opening PDF file...")
-        pdf_document = fitz.open(pdf_file_path)
-    except FileNotFoundError:
-        st.error(f"File not found: {pdf_file_path}")
-        return ""
+def remove_section_headers(text):
+    # Define the regular expression pattern to match sequences like "1. xy"
+    section_patterns = [
+        # Digits
+        r'\b\d+\.\s+\w+\b',
+        # Roman Numerals
+        r'\b[IVXLCDM]+\.\s+\w+\b'
+    ]
+
+    # Combine patterns into a single regex pattern
+    pattern = '|'.join(section_patterns)
+
+    # Use re.sub to replace matched sequences with an empty string
+    cleaned_text = re.sub(pattern, '', text)
+
+    return cleaned_text
+
+def exclude_header_footer(text):
+    # Split text into sentences using regex
+    sentences = re.split(r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?)\s', text)
     
-    text = ""
-    for page_number in range(pdf_document.page_count):
-        page = pdf_document[page_number]
-        text += page.get_text()
+    # No of sentences to exclude in header
+    num_sentences_to_exclude_header = int( len(sentences) * 0.05 )
+    # No of sentences to exclude in footer
+    num_sentences_to_exclude_footer = int(len(sentences) * 0.1 )
+    
+    # Exclude the header and footer  of page
+    excluded_sentences = sentences[num_sentences_to_exclude_header:-num_sentences_to_exclude_footer]
+    
+    # Rejoin the remaining sentences
+    remaining_text = ' '.join(excluded_sentences)
+    
+    return remaining_text
+
+def remove_citations(text):
+    # Define patterns for common citation formats
+    citation_patterns = [
+        # Match citations like "[1]", "[12]", "[123]", etc.
+        r'\[\d+\]',
+        
+        # Match citations like "(Author, Year)", "(Author et al., Year)", "(Author Year)", etc.
+        r'\(\w+(?: et al.)?, \d{4}\)',
+        
+        # Match citations like "[Author et al., Year]", "[Author, Year]", etc.
+        r'\[\w+(?: et al.)?, \d{4}\]'
+    ]
+    
+    # Combine patterns into a single regex pattern
+    combined_pattern = '|'.join(citation_patterns)
+    
+    # Remove citations from the text using the regex pattern
+    cleaned_text = re.sub(combined_pattern, '', text)
+    
+    return cleaned_text
+
+def replace_multiple_whitespace(text):
+    # Define the regular expression pattern to match multiple whitespace characters
+    pattern = r'\s+'
+    
+    # Use re.sub to replace multiple whitespace characters with a single whitespace character
+    cleaned_text = re.sub(pattern, ' ', text)
+    
+    return cleaned_text
+
+def fix_grammar(text):
+    tool = LanguageTool('en-US')
+
+    # Check for grammatical errors
+    matches = tool.check(text)
+    # Fix grammatical errors
+    corrected_text = tool.correct(text)
+
+    return corrected_text
+
+def preprocess_text(text):
+    # replace new line character with space
+    text = text.replace("\n"," ")
+
+    # removing extra whitespaces
+    text = replace_multiple_whitespace(text)
+
+    # remove citations
+    text = remove_citations(text)
+
+    #remove section heading
+    text = remove_section_headers(text)
 
     return text
 
-def getSections(pdf_file_path):
-    if pdf_file_path is None:
-        st.error("Please upload a valid PDF file.")
-        return []
+def get_paper_content(pdf_file_path):
+    with open(pdf_file_path, 'rb') as file:
+        pdf_reader = PyPDF2.PdfReader(file)
+        num_pages = len(pdf_reader.pages)
+        full_text = []
 
-    try:
-        st.write("Opening PDF file...")
-        pdf_document = fitz.open(pdf_file_path)
-    except FileNotFoundError:
-        st.error(f"File not found: {pdf_file_path}")
-        return []
+        for page_number in range(num_pages):
+            page = pdf_reader.pages[page_number]
+            page_content = page.extract_text()
+            cleaned_content = preprocess_text(page_content)
+            cleaned_content = exclude_header_footer(cleaned_content)
+            full_text.append(cleaned_content)
 
-    section_start_keywords = ["Abstract— ", "INTRODUCTION", "RELATED WORK", "LITERATURE REVIEW", "METHODOLOGY",
-                              "METHODOLOGIES", "RESULTS", "DATASET", "EVALUATION METRICS", "DISCUSSIONS", "CONCLUSION", "REFERENCES"]
+        final_text = '\n'.join(full_text)
 
-    # Define a regular expression pattern to match section titles
-    section_pattern = "|".join(section_start_keywords)
-    section_pattern = f"\\b({section_pattern})\\b"
+        return final_text
 
-    section_texts = []
-    text = ""
+def generate_summary(text, min_summary_length=128, max_summary_length=1024, overlap_percentage=35):
+    # Tokenize the input text
+    text = fix_grammar(text)
 
-    for page_number in range(pdf_document.page_count):
-        page = pdf_document[page_number]
-        text += page.get_text()
+    model = BartForConditionalGeneration.from_pretrained(model_path)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
 
-    sections = re.split(section_pattern, text)
-    for section_title, section_content in zip(sections[1::2], sections[2::2]):
-        # Normalize section title
-        if section_title == "REFERENCES":
-            continue
-        section_title = section_title.strip().replace("\n", " ")
-        section_content = section_content.strip()  # removing extra whitespaces
-        section_content = section_content.replace("\n", " ")  # replacing line endings with spaces
-        section_content = re.sub(r'\[\d+\]', '', section_content)
-        section_texts.append((section_title, section_content))
-
-    # Close the PDF file
-    pdf_document.close()
-
-    return section_texts
-
-def getSummary(text):
-    # Generating Tokens
-    tokenizer = AutoTokenizer.from_pretrained("facebook/bart-large-cnn")
-    input_tokens = tokenizer.encode(text, return_tensors="pt",max_length=1024,padding="max_length",truncation=False)
-    
-    print("Length of Input Tokens : ",len(input_tokens),type(input_tokens))
-    
-    # Generating Summaries
-    model = BartForConditionalGeneration.from_pretrained("bart-papers-trained-model")
-
-    summary_text = ""
-    max_tokens = 1000
-    for i in range(0,len(input_tokens),max_tokens):
-        summary_tokens = model.generate(input_tokens[i:i+max_tokens], min_length=64,max_length=256, num_beams=4, length_penalty=2.0,early_stopping=False)
-        summary_text += tokenizer.decode(summary_tokens[0], skip_special_tokens=True)
-
-    return summary_text
-
-def getSummaryWordLimit(text, word_limit):
-    # Generating Tokens
-    tokenizer = AutoTokenizer.from_pretrained("facebook/bart-large-cnn")
-    input_tokens = tokenizer.encode(text, return_tensors="pt",max_length=1024,padding="max_length",truncation=False)
-    
-    # Generating Summaries
-    model = BartForConditionalGeneration.from_pretrained("bart-papers-trained-model")
-    input_tokens_length = len(input_tokens)
+    tokenized_text = tokenizer.encode(text, return_tensors="pt", truncation=False)
+    # Calculate overlap size
     max_tokens = 1024
+    overlap_size = int(max_tokens * overlap_percentage / 100)
 
-    summary_text = ""
-    if input_tokens_length > max_tokens:
-        min_per_section = int( word_limit[0] / ( input_tokens_length // max_tokens ) )
-        max_per_section = int( word_limit[1] / ( input_tokens_length // max_tokens) )
-        
-        for i in range(0,input_tokens_length,max_tokens):
-            summary_tokens = model.generate(input_tokens[i:i+max_tokens], min_length=min_per_section,max_length=max_per_section, num_beams=4, length_penalty=2.0,early_stopping=False)
-            summary_text += tokenizer.decode(summary_tokens[0], skip_special_tokens=True)
-    else:
-        summary_tokens = model.generate(input_tokens, min_length=64,max_length=256, num_beams=4, length_penalty=2.0,early_stopping=False)
-        summary_text += tokenizer.decode(summary_tokens[0], skip_special_tokens=True)
+    # Generate summaries with overlapping chunks
+    summaries = []
+    for i in range(0, tokenized_text.size(1) - max_tokens + 1, max_tokens - overlap_size):
+        start = i
+        end = min(i + max_tokens, tokenized_text.size(1))
+        chunk = tokenized_text[:, start:end]
+        summary_ids = model.generate(chunk, min_length=min_summary_length, max_length=max_summary_length, num_beams=10, early_stopping=True, length_penalty=0.8, repetition_penalty=1.5)
+        summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+        summaries.append(summary)
 
-    return summary_text
+    # Concatenate summaries to create the final summary
+    final_summary = " ".join(summaries)
+    final_summary = final_summary.replace("\n"," ")
+    return fix_grammar(final_summary)
+
+def generate_pdf(summary):
+    pdf_file = "./temp/Summary.pdf"
+    document = SimpleDocTemplate(pdf_file, pagesize=letter)
+
+    story = []
+
+    # Adding Title to story
+    titleStyle = getSampleStyleSheet()
+    titleStyle = titleStyle['Title']
+    title = Paragraph("Summary", titleStyle)
+    story.append(title)
+    story.append(Spacer(1, 12))
+
+    # Adding Summary
+    paragraphStyle = getSampleStyleSheet()
+    paragraphStyle = paragraphStyle["Normal"]
+    paragraph = Paragraph(summary, paragraphStyle)
+    story.append(paragraph)
+    story.append(Spacer(1, 24))
+
+    document.build(story)
+
+def download_summary(file_path, filename):
+    with open(file_path, "rb") as file:
+        pdf_data = file.read()
+    
+    pdf_b64 = base64.b64encode(pdf_data).decode('utf-8')
+    href = f'<a href="data:application/pdf;base64,{pdf_b64}" download="{filename}">Download PDF File</a>'
+    return href
