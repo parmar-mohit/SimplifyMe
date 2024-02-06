@@ -1,39 +1,35 @@
 import streamlit as st
 import os
-from functions import generate_summary, get_paper_content, generate_pdf, download_summary
+from functions import get_paper_content, generate_summary, generate_pdf, download_summary, preprocess_text
 
 def app():
     # Set Streamlit app to use the full available width
     st.set_page_config(layout="wide")  
-    st.title("SimplifyMe - Content Summarizer")
+    st.title("SimplifyMe - A Content Summarizer")
 
     # Sidebar options
+    st.sidebar.image('./Images/Logo.png')
     selected_option = st.sidebar.radio("Select Option", ["Research Paper", "Sections", "Books"])
-
+    
     if selected_option == "Research Paper":
         st.header("Summarize Research Paper")
         uploaded_file = st.file_uploader("Upload a Research Paper (PDF)", type=["pdf"])
-
-        if uploaded_file:            
-            # Save the uploaded file to a temporary file
-            with st.spinner("Processing..."):
-                temp_file_path = save_uploaded_file(uploaded_file)
-
-            # Generate Summary of Paper
+    
+        if uploaded_file:
+            temp_file_path = save_uploaded_file(uploaded_file)
+            st.success("File uploaded successfully")
+            
+            # Clean and summarize the PDF
             if st.button("Generate Summary"):
-                summary_result = generate_summary(get_paper_content(temp_file_path))
-
-                if summary_result:
-                    st.subheader(f"Summary")
-                    st.markdown(f'<div style="text-align: justify">{summary_result}</div>', unsafe_allow_html=True)
-                    generate_pdf(summary_result)
-                    download_summary("./temp/Summary.pdf", f'{uploaded_file.name}_Summary.pdf')
-                    # if st.button('Download Summary'):
-                    #     print("Reached Here")
-                    #     generate_pdf(summary_result)
-                    #     st.markdown(download_summary(".temp/Summary.pdf", f'{uploaded_file.filename}_Summary.pdf'), unsafe_allow_html=True)
-                else:
-                    st.warning("Summary could not be generated for this section.")  
+                with st.spinner("Processing..."):
+                    paper_content = get_paper_content(temp_file_path)
+                    summary = generate_summary(paper_content)
+                    st.subheader("Summary:")
+                    st.markdown(f'<div style="text-align: justify">{summary}</div>', unsafe_allow_html=True)\
+                    
+                    #Generating and storing pdf
+                    generate_pdf(summary)
+                    st.markdown(download_summary("./temp/Summary.pdf", f'{uploaded_file.name}_Summary.pdf'), unsafe_allow_html=True)
     elif selected_option == "Sections":
         st.header("Summarize Text")
         summary_input = st.text_area("Enter your text for summarization")
@@ -43,7 +39,8 @@ def app():
         if st.button("Generate Summary"):
             if summary_input:
                 # Summarize the user input with user-defined max_length and min_length
-                summary = generate_summary(summary_input,min_length,max_length)
+                cleaned_text = preprocess_text(summary_input)
+                summary = generate_summary(cleaned_text, min_summary_length=min_length, max_summary_length=max_length)
                 st.markdown(f'<div style="text-align: justify">{summary}</div>', unsafe_allow_html=True)
     elif selected_option == "Books":
         st.write("Coming Soon!....")

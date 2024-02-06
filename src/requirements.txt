@@ -16,3 +16,6 @@ frontend
 tools
 nltk
 language-tool-python
+spacy
+fpdf
+PyPDF2
