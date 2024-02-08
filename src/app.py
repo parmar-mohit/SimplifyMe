@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-from functions import get_paper_content, generate_summary, generate_pdf, download_summary, preprocess_text
+from functions import get_paper_content, generate_summary_paper, generate_summary_text, generate_pdf, download_summary, preprocess_text, fix_grammar
 
 def app():
     # Set Streamlit app to use the full available width
@@ -9,13 +9,14 @@ def app():
 
     # Sidebar options
     st.sidebar.image('./Images/Logo.png')
-    selected_option = st.sidebar.radio("Select Option", ["Research Paper", "Sections", "Books"])
+    selected_option = st.sidebar.radio("Select Option", ["Research Paper", "Text", "Books"])
     
     if selected_option == "Research Paper":
         st.header("Summarize Research Paper")
         uploaded_file = st.file_uploader("Upload a Research Paper (PDF)", type=["pdf"])
     
         if uploaded_file:
+            paper_name = uploaded_file.name
             temp_file_path = save_uploaded_file(uploaded_file)
             st.success("File uploaded successfully")
             
@@ -23,14 +24,14 @@ def app():
             if st.button("Generate Summary"):
                 with st.spinner("Processing..."):
                     paper_content = get_paper_content(temp_file_path)
-                    summary = generate_summary(paper_content)
-                    st.subheader("Summary:")
+                    summary = generate_summary_paper(paper_content)
+                    st.subheader("Summary : " + paper_name )
                     st.markdown(f'<div style="text-align: justify">{summary}</div>', unsafe_allow_html=True)\
                     
                     #Generating and storing pdf
-                    generate_pdf(summary)
+                    generate_pdf(summary,paper_name)
                     st.markdown(download_summary("./temp/Summary.pdf", f'{uploaded_file.name}_Summary.pdf'), unsafe_allow_html=True)
-    elif selected_option == "Sections":
+    elif selected_option == "Text":
         st.header("Summarize Text")
         summary_input = st.text_area("Enter your text for summarization")
         max_length = st.slider("Select Maximum Summary Length", min_value=30, max_value=500, value=150)
@@ -40,7 +41,7 @@ def app():
             if summary_input:
                 # Summarize the user input with user-defined max_length and min_length
                 cleaned_text = preprocess_text(summary_input)
-                summary = generate_summary(cleaned_text, min_summary_length=min_length, max_summary_length=max_length)
+                summary = generate_summary_text(cleaned_text, min_summary_length=min_length, max_summary_length=max_length)
                 st.markdown(f'<div style="text-align: justify">{summary}</div>', unsafe_allow_html=True)
     elif selected_option == "Books":
         st.write("Coming Soon!....")

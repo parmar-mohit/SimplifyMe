@@ -8,7 +8,8 @@ from reportlab.platypus import Spacer
 from language_tool_python import LanguageTool
 from transformers import AutoTokenizer, BartForConditionalGeneration
 
-model_path = "iter_trained_model"
+paper_model_path = "iter_trained_model"
+text_model_path = "facebook/bart-large-cnn"
 tokenizer_path = "facebook/bart-large-cnn"
 
 def remove_section_headers(text):
@@ -117,11 +118,11 @@ def get_paper_content(pdf_file_path):
 
         return final_text
 
-def generate_summary(text, min_summary_length=128, max_summary_length=1024, overlap_percentage=35):
+def generate_summary_paper(text, min_summary_length=128, max_summary_length=1024, overlap_percentage=35):
     # Tokenize the input text
     text = fix_grammar(text)
 
-    model = BartForConditionalGeneration.from_pretrained(model_path)
+    model = BartForConditionalGeneration.from_pretrained(paper_model_path)
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
 
     tokenized_text = tokenizer.encode(text, return_tensors="pt", truncation=False)
@@ -144,7 +145,34 @@ def generate_summary(text, min_summary_length=128, max_summary_length=1024, over
     final_summary = final_summary.replace("\n"," ")
     return fix_grammar(final_summary)
 
-def generate_pdf(summary):
+def generate_summary_text(text, min_summary_length=128, max_summary_length=1024, overlap_percentage=35):
+    # Tokenize the input text
+    text = fix_grammar(text)
+
+    model = BartForConditionalGeneration.from_pretrained(text_model_path)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+
+    tokenized_text = tokenizer.encode(text, return_tensors="pt", truncation=False)
+    # Calculate overlap size
+    max_tokens = 1024
+    overlap_size = int(max_tokens * overlap_percentage / 100)
+
+    # Generate summaries with overlapping chunks
+    summaries = []
+    for i in range(0, tokenized_text.size(1) - max_tokens + 1, max_tokens - overlap_size):
+        start = i
+        end = min(i + max_tokens, tokenized_text.size(1))
+        chunk = tokenized_text[:, start:end]
+        summary_ids = model.generate(chunk, min_length=min_summary_length, max_length=max_summary_length, num_beams=10, early_stopping=True, length_penalty=0.8, repetition_penalty=1.5)
+        summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+        summaries.append(summary)
+
+    # Concatenate summaries to create the final summary
+    final_summary = " ".join(summaries)
+    final_summary = final_summary.replace("\n"," ")
+    return fix_grammar(final_summary)
+
+def generate_pdf(summary,paper_name):
     pdf_file = "./temp/Summary.pdf"
     document = SimpleDocTemplate(pdf_file, pagesize=letter)
 
@@ -153,7 +181,7 @@ def generate_pdf(summary):
     # Adding Title to story
     titleStyle = getSampleStyleSheet()
     titleStyle = titleStyle['Title']
-    title = Paragraph("Summary", titleStyle)
+    title = Paragraph("Summary : "+paper_name, titleStyle)
     story.append(title)
     story.append(Spacer(1, 12))
 
