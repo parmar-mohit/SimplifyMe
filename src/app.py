@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-from functions import get_paper_content, generate_summary_paper, generate_summary_text, generate_pdf, download_summary, preprocess_text, fix_grammar
+from functions import get_paper_content, generate_summary_paper, generate_summary_text, generate_pdf, download_summary, preprocess_text
 
 def app():
     # Set Streamlit app to use the full available width
@@ -9,7 +9,7 @@ def app():
 
     # Sidebar options
     st.sidebar.image('./Images/Logo.png')
-    selected_option = st.sidebar.radio("Select Option", ["Research Paper", "Text", "Books"])
+    selected_option = st.sidebar.radio("Select Option", ["Research Paper", "Text"])
     
     if selected_option == "Research Paper":
         st.header("Summarize Research Paper")
