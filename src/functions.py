@@ -125,7 +125,7 @@ def generate_summary_paper(text, min_summary_length=128, max_summary_length=1024
     text = fix_grammar(text)
     
     model = BartForConditionalGeneration.from_pretrained(paper_model_path).to(device)
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path,device=device)
 
     tokenized_text = tokenizer.encode(text, return_tensors="pt", truncation=False).to(device)
     # Calculate overlap size
@@ -138,7 +138,7 @@ def generate_summary_paper(text, min_summary_length=128, max_summary_length=1024
         start = i
         end = min(i + max_tokens, tokenized_text.size(1))
         chunk = tokenized_text[:, start:end]
-        summary_ids = model.generate(chunk, min_length=min_summary_length, max_length=max_summary_length, num_beams=10, early_stopping=True, length_penalty=0.8, repetition_penalty=1.5)
+        summary_ids = model.generate(chunk, min_length=min_summary_length, max_length=max_summary_length, num_beams=16, early_stopping=True, length_penalty=0.8, repetition_penalty=1.5)
         summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
         summaries.append(summary)
 
@@ -162,7 +162,7 @@ def generate_summary_text(text, min_summary_length=128, max_summary_length=1024,
     # Generate summaries with overlapping chunks
     summaries = []
     if tokenized_text.size(1) - max_tokens+1 < 0:
-        summary_ids = model.generate(tokenized_text[:,:], min_length=min_summary_length, max_length=max_summary_length, num_beams=10, early_stopping=True, length_penalty=0.8, repetition_penalty=1.5)
+        summary_ids = model.generate(tokenized_text[:,:], min_length=min_summary_length, max_length=max_summary_length, num_beams=16, early_stopping=True, length_penalty=0.8, repetition_penalty=1.5)
         summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
         summaries.append(summary)
     else:
@@ -170,7 +170,7 @@ def generate_summary_text(text, min_summary_length=128, max_summary_length=1024,
             start = i
             end = min(i + max_tokens, tokenized_text.size(1))
             chunk = tokenized_text[:, start:end]
-            summary_ids = model.generate(chunk, min_length=min_summary_length, max_length=max_summary_length, num_beams=10, early_stopping=True, length_penalty=0.8, repetition_penalty=1.5)
+            summary_ids = model.generate(chunk, min_length=min_summary_length, max_length=max_summary_length, num_beams=16, early_stopping=True, length_penalty=0.8, repetition_penalty=1.5)
             summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
             summaries.append(summary)
 

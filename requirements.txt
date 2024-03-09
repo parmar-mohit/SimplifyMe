@@ -7,7 +7,7 @@ language-tool-python
 matplotlib
 numpy
 pandas
-PyMuPDF
+PyPDF2
 reportlab
 requests
 rougue_score
