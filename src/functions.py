@@ -11,7 +11,7 @@ import torch
 
 paper_model_path = "iter_trained_model"
 text_model_path = "facebook/bart-large-cnn"
-tokenizer_path = "facebook/bart-large-cnn"
+tokenizer_path = "tokenizer"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 

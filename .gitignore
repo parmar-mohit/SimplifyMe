@@ -5,6 +5,7 @@ Summary.pdf
 bart-papers-trained-model/*
 
 iter_trained_model/*
+tokenizer/*
 
 Images/Transformer Architecture.drawio
 
